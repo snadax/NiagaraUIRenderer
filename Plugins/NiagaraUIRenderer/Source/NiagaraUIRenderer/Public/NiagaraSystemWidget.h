@@ -62,19 +62,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Niagara UI Renderer", DisplayName = "Niagara System", BlueprintSetter = UpdateNiagaraSystemReference)
 	class UNiagaraSystem* NiagaraSystemReference;
 
-	/*
-		List of material references used to remap materials on the particle system, to materials with "User Interface" material domain.
-
-		Every Key (Material on the left) will be remapped to it's Value (Material on the right)
-
-		This is useful for keeping the particle system rendering correctly in the niagara editor and in the world, while it still can be used as UI particle system.
-
-		The alternative is to apply materials with "User Interface" material domain directly in niagara renderers, but this will result in particle system
-		not rendering correctly, if used outside UI renderer.
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Niagara UI Renderer")
-	TMap<UMaterialInterface*, UMaterialInterface*> MaterialRemapList;
-
 	// Should be this particle system automatically activated?
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Niagara UI Renderer")
 	bool AutoActivate = true;

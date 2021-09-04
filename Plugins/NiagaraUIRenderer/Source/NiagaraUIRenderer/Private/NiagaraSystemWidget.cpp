@@ -56,7 +56,6 @@ void UNiagaraSystemWidget::PostEditChangeProperty(FPropertyChangedEvent& Propert
 	{
 		const FName PropertyName = PropertyChangedEvent.MemberProperty->GetFName();
 		if (PropertyName == GET_MEMBER_NAME_CHECKED(UNiagaraSystemWidget, NiagaraSystemReference)
-			|| PropertyName == GET_MEMBER_NAME_CHECKED(UNiagaraSystemWidget, MaterialRemapList)
 			|| PropertyName == GET_MEMBER_NAME_CHECKED(UNiagaraSystemWidget, AutoActivate)
 			|| PropertyName == GET_MEMBER_NAME_CHECKED(UNiagaraSystemWidget, FakeDepthScale)
 			|| PropertyName == GET_MEMBER_NAME_CHECKED(UNiagaraSystemWidget, FakeDepthScaleDistance))
@@ -89,7 +88,7 @@ void UNiagaraSystemWidget::InitializeNiagaraUI()
 				NiagaraComponent->SetForceSolo(true);
             }
 		}
-		NiagaraSlateWidget->SetNiagaraComponentReference(NiagaraComponent, FNiagaraWidgetProperties(&MaterialRemapList, AutoActivate, ShowDebugSystemInWorld, FakeDepthScale, FakeDepthScaleDistance));
+		NiagaraSlateWidget->SetNiagaraComponentReference(NiagaraComponent, FNiagaraWidgetProperties(AutoActivate, ShowDebugSystemInWorld, FakeDepthScale, FakeDepthScaleDistance));
 	}
 }
 
