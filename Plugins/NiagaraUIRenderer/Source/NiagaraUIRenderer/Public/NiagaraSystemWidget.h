@@ -103,8 +103,5 @@ private:
 	TSharedPtr<SNiagaraUISystemWidget> NiagaraSlateWidget;
 
 	UPROPERTY()
-	class ANiagaraUIActor* NiagaraActor;
-
-	UPROPERTY()
 	class UNiagaraUIComponent* NiagaraComponent;
 };

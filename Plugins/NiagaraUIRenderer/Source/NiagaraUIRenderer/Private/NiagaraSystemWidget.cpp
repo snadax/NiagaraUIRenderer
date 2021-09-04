@@ -3,7 +3,6 @@
 #include "NiagaraSystemWidget.h"
 #include "SNiagaraUISystemWidget.h"
 #include "Materials/MaterialInterface.h"
-#include "NiagaraUIActor.h"
 #include "NiagaraUIComponent.h"
 
 UNiagaraSystemWidget::UNiagaraSystemWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -29,7 +28,7 @@ void UNiagaraSystemWidget::SynchronizeProperties()
 		return;
 	}
 
-	if (!NiagaraActor || !NiagaraComponent)
+	if (!NiagaraComponent)
 		InitializeNiagaraUI();
 	
 }
@@ -40,8 +39,8 @@ void UNiagaraSystemWidget::ReleaseSlateResources(bool bReleaseChildren)
 	
 	NiagaraSlateWidget.Reset();
 
-	if (NiagaraActor)
-		NiagaraActor->Destroy();
+	if (NiagaraComponent)
+		NiagaraComponent->UnregisterComponent();
 }
 
 #if WITH_EDITOR
@@ -75,16 +74,21 @@ void UNiagaraSystemWidget::InitializeNiagaraUI()
 		if (!World->PersistentLevel)
 			return;
 
-			
-		if (!NiagaraActor)
+		if (!NiagaraComponent)
 		{
-			FActorSpawnParameters spawnParams;
-			spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			NiagaraActor = World->SpawnActor<ANiagaraUIActor>(FVector::ZeroVector, FRotator::ZeroRotator, spawnParams);
+			NiagaraComponent = NewObject<UNiagaraUIComponent>(this);
+            NiagaraComponent->SetAutoActivate(AutoActivate);
+            NiagaraComponent->SetHiddenInGame(!ShowDebugSystemInWorld);
+            NiagaraComponent->RegisterComponentWithWorld(World);
+            NiagaraComponent->SetAsset(NiagaraSystemReference);
+            NiagaraComponent->SetAutoDestroy(false);
+
+            if (TickWhenPaused)
+            {
+				NiagaraComponent->PrimaryComponentTick.bTickEvenWhenPaused = true;
+				NiagaraComponent->SetForceSolo(true);
+            }
 		}
-
-		NiagaraComponent = NiagaraActor->SpawnNewNiagaraUIComponent(NiagaraSystemReference, AutoActivate, ShowDebugSystemInWorld, TickWhenPaused);
-
 		NiagaraSlateWidget->SetNiagaraComponentReference(NiagaraComponent, FNiagaraWidgetProperties(&MaterialRemapList, AutoActivate, ShowDebugSystemInWorld, FakeDepthScale, FakeDepthScaleDistance));
 	}
 }
