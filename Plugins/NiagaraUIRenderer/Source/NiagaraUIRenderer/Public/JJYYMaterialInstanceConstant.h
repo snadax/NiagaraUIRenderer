@@ -18,5 +18,9 @@ class UJJYYMaterialInstanceConstant : public UMaterialInstanceConstant
 	
 public:
     bool CheckMaterialUsage_Concurrent(const EMaterialUsage Usage) const override;
+	
+	bool JJYYNeedsSetMaterialUsage_Concurrent(bool& bOutHasUsage, const EMaterialUsage Usage) const;
+
+	bool CheckMaterialUsage(const EMaterialUsage Usage) override;
 
 };
