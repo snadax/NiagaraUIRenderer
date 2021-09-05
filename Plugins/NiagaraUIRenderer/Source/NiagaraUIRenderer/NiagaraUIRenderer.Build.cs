@@ -40,6 +40,7 @@ public class NiagaraUIRenderer : ModuleRules
 				"Slate",
 				"SlateCore",
 				"Niagara",
+                "RenderCore",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
