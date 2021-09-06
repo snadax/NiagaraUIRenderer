@@ -11,8 +11,8 @@
  * JJYY Material Instances may be used to UI and Niagara.
  */
 
-UCLASS(MinimalAPI)
-class UJJYYMaterialInstanceConstant : public UMaterialInstanceConstant
+UCLASS()
+class NIAGARAUIRENDERER_API  UJJYYMaterialInstanceConstant : public UMaterialInstanceConstant
 {
 	GENERATED_UCLASS_BODY()
 	
@@ -23,4 +23,5 @@ public:
 
 	bool CheckMaterialUsage(const EMaterialUsage Usage) override;
 
+	void InitResources();
 };

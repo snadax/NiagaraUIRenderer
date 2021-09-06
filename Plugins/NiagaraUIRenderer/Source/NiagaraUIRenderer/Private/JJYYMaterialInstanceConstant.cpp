@@ -130,3 +130,8 @@ bool UJJYYMaterialInstanceConstant::CheckMaterialUsage(const EMaterialUsage Usag
     }
 }
 
+void UJJYYMaterialInstanceConstant::InitResources()
+{
+    Super::InitResources();
+}
+

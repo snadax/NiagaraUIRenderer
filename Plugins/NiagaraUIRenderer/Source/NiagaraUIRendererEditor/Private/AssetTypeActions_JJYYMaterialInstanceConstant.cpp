@@ -31,7 +31,17 @@ FString UJJYYMaterialInstanceConstantFactory::GetDefaultNewAssetName() const
 UObject* UJJYYMaterialInstanceConstantFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
 {
     check(Class->IsChildOf(UJJYYMaterialInstanceConstant::StaticClass()));
-    return NewObject<UJJYYMaterialInstanceConstant>(InParent, Class, Name, Flags);;
+    auto MIC = NewObject<UJJYYMaterialInstanceConstant>(InParent, Class, Name, Flags);
+    if (MIC)
+    {
+        MIC->InitResources();
+
+        if (InitialParent)
+        {
+            MIC->SetParentEditorOnly(InitialParent);
+        }
+    }
+    return MIC;
 }
 
 

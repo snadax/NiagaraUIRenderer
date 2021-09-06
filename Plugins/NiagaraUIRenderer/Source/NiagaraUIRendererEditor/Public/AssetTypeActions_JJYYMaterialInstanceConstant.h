@@ -17,6 +17,9 @@ class UJJYYMaterialInstanceConstantFactory : public UFactory
     GENERATED_UCLASS_BODY()
     virtual UObject* FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn) override;
     virtual bool CanCreateNew() const override;
+
+    UPROPERTY()
+        class UMaterialInterface* InitialParent;
 public:
     FText GetDisplayName() const override;
 
