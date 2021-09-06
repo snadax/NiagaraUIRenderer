@@ -5,6 +5,8 @@
 #include "NiagaraUIContentBrowserExtension.h"
 #include "NiagaraUIRendererEditorStyle.h"
 #include "NiagaraWidgetDetailCustomization.h"
+#include "Developer/AssetTools/Public/AssetToolsModule.h"
+#include "AssetTypeActions_JJYYMaterialInstanceConstant.h"
 
 #define LOCTEXT_NAMESPACE "FNiagaraUIRendererEditorModule"
 
@@ -23,6 +25,9 @@ void FNiagaraUIRendererEditorModule::StartupModule()
 	{
 		FNiagaraUIContentBrowserExtension::InstallHooks();
 	}
+
+    IAssetTools& myAssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+    myAssetTools.RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_JJYYMaterialInstanceConstant()));
 }
 
 void FNiagaraUIRendererEditorModule::ShutdownModule()
