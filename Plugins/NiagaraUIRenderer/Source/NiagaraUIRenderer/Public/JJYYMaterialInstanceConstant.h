@@ -24,4 +24,5 @@ public:
 	bool CheckMaterialUsage(const EMaterialUsage Usage) override;
 
 	void InitResources();
+
 };

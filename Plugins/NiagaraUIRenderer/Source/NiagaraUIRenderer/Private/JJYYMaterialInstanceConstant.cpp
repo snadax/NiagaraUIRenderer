@@ -94,6 +94,7 @@ bool UJJYYMaterialInstanceConstant::CheckMaterialUsage(const EMaterialUsage Usag
     UMaterial* Material = GetMaterial();
     if (Material)
     {
+        
         bool bNeedsRecompile = false;
         bool bUsageSetSuccessfully = false;
 

@@ -21,23 +21,15 @@ int32 SNiagaraUISystemWidget::OnPaint(const FPaintArgs& Args, const FGeometry& A
 {
     if (!NiagaraComponent.IsValid())
         return LayerId;
-
-    const FSlateLayoutTransform LayoutTransform = AllottedGeometry.GetAccumulatedLayoutTransform();
-    
-    const float LayoutScale = LayoutTransform.GetScale();
-
-    const FVector2D ParentTopLeft = FVector2D(MyCullingRect.Left, MyCullingRect.Top);
-
-    const FSlateRenderTransform SlateRenderTransform = AllottedGeometry.GetAccumulatedRenderTransform();
-    
-    const FVector2D Location2D = (AllottedGeometry.GetAbsolutePositionAtCoordinates(FVector2D(0.5f, 0.5f)) - ParentTopLeft) / LayoutScale;
-    const FScale2D Scale2D = SlateRenderTransform.GetMatrix().GetScale();
-    const float Angle = SlateRenderTransform.GetMatrix().GetRotationAngle();
-
     UNiagaraUIComponent* NiagaraUIComponent = NiagaraComponent.Get();
+    const FSlateLayoutTransform& SlateLayoutTransform = AllottedGeometry.GetAccumulatedLayoutTransform();
+    const FSlateRenderTransform& SlateRenderTransform = AllottedGeometry.GetAccumulatedRenderTransform();
+    
+    FTransform2D FixedCenterTransform(AllottedGeometry.Size / 2); 
+    FixedCenterTransform = FixedCenterTransform.Concatenate(SlateRenderTransform);
+    NiagaraUIComponent->SetTransformationForUIRendering(FixedCenterTransform);
 
-    NiagaraUIComponent->SetTransformationForUIRendering(Location2D, Scale2D.GetVector() / LayoutScale, Angle);
-    NiagaraUIComponent->RenderUI(const_cast<SNiagaraUISystemWidget*>(this), LayoutScale, ParentTopLeft, &WidgetProperties);
+    NiagaraUIComponent->RenderUI(const_cast<SNiagaraUISystemWidget*>(this), SlateLayoutTransform, FixedCenterTransform, &WidgetProperties);
 
     return SMeshWidget::OnPaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 }
@@ -60,8 +52,35 @@ void SNiagaraUISystemWidget::AddRenderData(FSlateVertex** OutVertexData, SlateIn
         NewRenderData.Brush = CreateSlateMaterialBrush(Material);
         NewRenderData.RenderingResourceHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(*NewRenderData.Brush);
     }
+    AddRenderRun(RenderData.Num()-1,0,1);
+    FSlateInstanceBufferData InstanceBuffer;
+    InstanceBuffer.Add(FVector4());
+    UpdatePerInstanceBuffer(RenderData.Num() - 1, InstanceBuffer);
+
 }
 
+
+int32 SNiagaraUISystemWidget::AddRenderDataWithInstance(FSlateVertex** OutVertexData, SlateIndex** OutIndexData, UMaterialInterface* Material, int32 NumVertexData, int32 NumIndexData)
+{
+    if (NumVertexData < 1 || NumIndexData < 1)
+        return -1;
+
+    int32 RenderDataIndex = RenderData.Add(FRenderData());
+    FRenderData& NewRenderData = RenderData[RenderDataIndex];
+
+    NewRenderData.VertexData.AddUninitialized(NumVertexData);
+    *OutVertexData = &NewRenderData.VertexData[0];
+
+    NewRenderData.IndexData.AddUninitialized(NumIndexData);
+    *OutIndexData = &NewRenderData.IndexData[0];
+
+    if (Material)
+    {
+        NewRenderData.Brush = CreateSlateMaterialBrush(Material);
+        NewRenderData.RenderingResourceHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(*NewRenderData.Brush);
+    }
+    return RenderDataIndex;
+}
 
 void SNiagaraUISystemWidget::ClearRenderData()
 {
