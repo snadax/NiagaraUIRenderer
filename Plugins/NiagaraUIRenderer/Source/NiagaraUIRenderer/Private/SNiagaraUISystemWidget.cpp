@@ -23,13 +23,20 @@ int32 SNiagaraUISystemWidget::OnPaint(const FPaintArgs& Args, const FGeometry& A
         return LayerId;
     UNiagaraUIComponent* NiagaraUIComponent = NiagaraComponent.Get();
     const FSlateLayoutTransform& SlateLayoutTransform = AllottedGeometry.GetAccumulatedLayoutTransform();
-    const FSlateRenderTransform& SlateRenderTransform = AllottedGeometry.GetAccumulatedRenderTransform();
-    
-    FTransform2D FixedCenterTransform(AllottedGeometry.Size / 2); 
-    FixedCenterTransform = FixedCenterTransform.Concatenate(SlateRenderTransform);
-    NiagaraUIComponent->SetTransformationForUIRendering(FixedCenterTransform);
+   
+    float A, B, C, D;
+    AllottedGeometry.GetAccumulatedRenderTransform().GetMatrix().GetMatrix(A, B, C, D);
+    FVector2D T = AllottedGeometry.GetAbsolutePositionAtCoordinates(FVector2D(0.5f, 0.5f)) / AllottedGeometry.Scale;
+    FMatrix M3 = FMatrix(
+        FPlane(A,   0.f, -B,   0.f),
+        FPlane(0.f, 1.f, 0.f,  0.f),
+        FPlane(-C,  0.f, D,    0.f),
+        FPlane(T.X, 0.f, -T.Y, 1.f)
+    );
+    FTransform ComponentTransform(M3);
+    NiagaraUIComponent->SetTransformationForUIRendering(ComponentTransform);
 
-    NiagaraUIComponent->RenderUI(const_cast<SNiagaraUISystemWidget*>(this), SlateLayoutTransform, FixedCenterTransform, &WidgetProperties);
+    NiagaraUIComponent->RenderUI(const_cast<SNiagaraUISystemWidget*>(this), SlateLayoutTransform, ComponentTransform, &WidgetProperties);
 
     return SMeshWidget::OnPaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 }

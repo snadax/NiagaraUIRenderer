@@ -13,26 +13,11 @@ DECLARE_STATS_GROUP(TEXT("NiagaraUI"), STATGROUP_NiagaraUI, STATCAT_Advanced);
 DECLARE_CYCLE_STAT(TEXT("Generate Sprite Data"), STAT_GenerateSpriteData, STATGROUP_NiagaraUI);
 DECLARE_CYCLE_STAT(TEXT("Generate Ribbon Data"), STAT_GenerateRibbonData, STATGROUP_NiagaraUI);
 
-//PRAGMA_DISABLE_OPTIMIZATION
+PRAGMA_DISABLE_OPTIMIZATION
 
-void UNiagaraUIComponent::SetTransformationForUIRendering(FVector2D Location, FVector2D Scale, float Angle)
+void UNiagaraUIComponent::SetTransformationForUIRendering(const FTransform& Transform)
 {
-	const FVector NewLocation(Location.X, 0.f, -Location.Y);
-	const FVector NewScale(Scale.X, 1.f, Scale.Y);
-	const FRotator NewRotation(FMath::RadiansToDegrees(Angle), 0.f, 0.f);;
-	WidgetAngleRad = Angle;
-    SetRelativeTransform(FTransform(NewRotation, NewLocation, NewScale));
-
-	if (bAutoActivate)
-	{
-		ActivateSystem();
-		bAutoActivate = false;
-	}
-}
-
-void UNiagaraUIComponent::SetTransformationForUIRendering(const FSlateRenderTransform& SlateRenderTransform)
-{
-    float A, B, C, D;
+    /*float A, B, C, D;
 	SlateRenderTransform.GetMatrix().GetMatrix(A, B, C, D);
     FVector2D T = SlateRenderTransform.GetTranslation();
     FMatrix M3 = FMatrix(
@@ -40,9 +25,9 @@ void UNiagaraUIComponent::SetTransformationForUIRendering(const FSlateRenderTran
         FPlane(0.0f, 1.0f, 0.0f, 0.0f),
         FPlane(-C, 0.0f, D, 0.0f),
         FPlane(T.X, 0.0f, -T.Y, 1.0f)
-    );
+    );*/
 
-    SetRelativeTransform(FTransform(M3));
+    SetRelativeTransform(Transform);
 
     if (bAutoActivate)
     {
@@ -60,7 +45,7 @@ struct FNiagaraRendererEntry
 	UNiagaraEmitter* Emitter;
 };
 
-void UNiagaraUIComponent::RenderUI(SNiagaraUISystemWidget* NiagaraWidget, const FSlateLayoutTransform& SlateLayoutTransform, const FSlateRenderTransform& SlateRenderTransform, const FNiagaraWidgetProperties* WidgetProperties)
+void UNiagaraUIComponent::RenderUI(SNiagaraUISystemWidget* NiagaraWidget, const FSlateLayoutTransform& SlateLayoutTransform, const FTransform& ComponentTransform, const FNiagaraWidgetProperties* WidgetProperties)
 {
 	if (!IsActive())
 		return;
@@ -96,11 +81,11 @@ void UNiagaraUIComponent::RenderUI(SNiagaraUISystemWidget* NiagaraWidget, const 
 			{
 				if (UNiagaraSpriteRendererProperties* SpriteRenderer = Cast<UNiagaraSpriteRendererProperties>(Renderer.RendererProperties))
 				{
-					AddSpriteRendererData(NiagaraWidget, Renderer.EmitterInstance, SpriteRenderer, SlateLayoutTransform, SlateRenderTransform, WidgetProperties);
+					AddSpriteRendererData(NiagaraWidget, Renderer.EmitterInstance, SpriteRenderer, SlateLayoutTransform, ComponentTransform, WidgetProperties);
 				}
 				else if (UNiagaraRibbonRendererProperties* RibbonRenderer = Cast<UNiagaraRibbonRendererProperties>(Renderer.RendererProperties))
 				{
-					AddRibbonRendererData(NiagaraWidget, Renderer.EmitterInstance, RibbonRenderer, SlateLayoutTransform, SlateRenderTransform, WidgetProperties);
+					AddRibbonRendererData(NiagaraWidget, Renderer.EmitterInstance, RibbonRenderer, SlateLayoutTransform, ComponentTransform, WidgetProperties);
 				}
 			}
 		}
@@ -184,12 +169,16 @@ static void PackSubImage(FVector4& Datas, uint8 index,uint8 sizeX,uint8 sizeY)
     PackUint8IntoByte<3, 1>(Datas, sizeY * 16 + sizeX);
 }
 
-void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraWidget, TSharedRef<const FNiagaraEmitterInstance, ESPMode::ThreadSafe> EmitterInst, UNiagaraSpriteRendererProperties* SpriteRenderer, const FSlateLayoutTransform& SlateLayoutTransform, const FSlateRenderTransform& SlateRenderTransform, const FNiagaraWidgetProperties* WidgetProperties)
+void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraWidget, TSharedRef<const FNiagaraEmitterInstance, ESPMode::ThreadSafe> EmitterInst, UNiagaraSpriteRendererProperties* SpriteRenderer, const FSlateLayoutTransform& SlateLayoutTransform, const FTransform& ComponentTransform, const FNiagaraWidgetProperties* WidgetProperties)
 {
     {
         SCOPE_CYCLE_COUNTER(STAT_GenerateSpriteData);
 
         FNiagaraDataSet& DataSet = EmitterInst->GetData();
+        if (!DataSet.IsCurrentDataValid())
+        {
+            return;
+        }
         FNiagaraDataBuffer& ParticleData = DataSet.GetCurrentDataChecked();
         const int32 ParticleCount = ParticleData.GetNumInstances();
 
@@ -251,10 +240,22 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
         const auto SubImageData = FNiagaraDataSetAccessor<float>::CreateReader(DataSet, SpriteRenderer->SubImageIndexBinding.GetDataSetBindableVariable().GetName());
         const auto DynamicMaterialData = FNiagaraDataSetAccessor<FVector4>::CreateReader(DataSet, SpriteRenderer->DynamicMaterialBinding.GetDataSetBindableVariable().GetName());
 
-        auto GetParticlePosition2D = [&PositionData](int32 Index)
+        bool LocalSpace = EmitterInst->GetCachedEmitter()->bLocalSpace;
+        const float FakeDepthScaler = 1 / WidgetProperties->FakeDepthScaleDistance;
+        FVector2D SubImageSize = SpriteRenderer->SubImageSize;
+
+		FVector ComponentPos = ComponentTransform.GetLocation();
+        FQuat ComponentRot = ComponentTransform.GetRotation();
+        float ComponentRotAng =FMath::RadiansToDegrees(ComponentRot.GetAngle());
+        float LayoutScale = SlateLayoutTransform.GetScale();
+        FVector WidgetAbsolutePosition = ComponentPos*LayoutScale;
+
+        auto GetParticlePosition2D = [&LocalSpace , &LayoutScale,&WidgetAbsolutePosition,&ComponentPos,&ComponentRot ,&PositionData](int32 Index)
         {
             const FVector Position3D = PositionData.GetSafe(Index, FVector::ZeroVector);
-            return FVector2D(Position3D.X, -Position3D.Z);
+			FVector ComponentRelative = LocalSpace ? ComponentRot.RotateVector(Position3D) : Position3D - ComponentPos;
+			FVector WidgetRelative = ComponentRelative * LayoutScale;
+            return  FVector2D(WidgetAbsolutePosition.X + WidgetRelative.X,-WidgetAbsolutePosition.Z - WidgetRelative.Z);
         };
 
         auto GetParticleDepth = [&PositionData](int32 Index)
@@ -267,10 +268,11 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
             return ColorData.GetSafe(Index, FLinearColor::White);
         };
 
-        auto GetParticleVelocity2D = [&VelocityData](int32 Index)
+        auto GetParticleVelocity2D = [&LocalSpace ,&ComponentRot ,&VelocityData](int32 Index)
         {
             const FVector Velocity3D = VelocityData.GetSafe(Index, FVector::ZeroVector);
-            return FVector2D(Velocity3D.X, Velocity3D.Z);
+            FVector RelativeVelocity3D = LocalSpace ? ComponentRot.RotateVector(Velocity3D): Velocity3D;
+            return FVector2D(RelativeVelocity3D.X, RelativeVelocity3D.Z);
         };
 
         auto GetParticleSize = [&SizeData](int32 Index)
@@ -292,13 +294,6 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
         {
             return DynamicMaterialData.GetSafe(Index, FVector4(0.f, 0.f, 0.f, 0.f));
         };
-
-       
-        bool LocalSpace = EmitterInst->GetCachedEmitter()->bLocalSpace;
-
-        const float FakeDepthScaler = 1 / WidgetProperties->FakeDepthScaleDistance;
-
-        FVector2D SubImageSize = SpriteRenderer->SubImageSize;
 
         FSlateInstanceBufferData InstanceData;
 
@@ -322,9 +317,8 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
             if (SpriteRenderer->Alignment == ENiagaraSpriteAlignment::VelocityAligned)
             {
                 const FVector2D ParticleVelocity = GetParticleVelocity2D(ParticleIndex);
-                float Ang1 = FMath::Atan2(ParticleVelocity.X, ParticleVelocity.Y);
-                float Ang = FMath::RadiansToDegrees(Ang1);				                
-				ParticleRotation = Ang;
+                float Ang = FMath::Atan2(ParticleVelocity.X, ParticleVelocity.Y);
+				ParticleRotation = FMath::RadiansToDegrees(Ang);
             }
             else
             {
@@ -343,14 +337,6 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
                 Column = (int)(ParticleSubImage) % (int)(SubImageSize.X);
             }
 			
-			if (LocalSpace)
-			{
-				ParticlePosition = SlateRenderTransform.TransformPoint(ParticlePosition);
-				FVector2D RV = SlateRenderTransform.TransformVector(FVector2D(1.f,0.f));
-                float ParentRotRad = FMath::Atan2(RV.Y, RV.X);
-				ParticleRotation += FMath::RadiansToDegrees(ParentRotRad);
-			}
-
             FSlateVectorArtInstanceData ArtInstData;
             FVector4& data = ArtInstData.GetData();
             InitPack(data);
@@ -369,11 +355,15 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
 
 }
 
-void UNiagaraUIComponent::AddRibbonRendererData(SNiagaraUISystemWidget* NiagaraWidget, TSharedRef<const FNiagaraEmitterInstance, ESPMode::ThreadSafe> EmitterInst, UNiagaraRibbonRendererProperties* RibbonRenderer, const FSlateLayoutTransform& SlateLayoutTransform, const FSlateRenderTransform& SlateRenderTransform, const FNiagaraWidgetProperties* WidgetProperties)
+void UNiagaraUIComponent::AddRibbonRendererData(SNiagaraUISystemWidget* NiagaraWidget, TSharedRef<const FNiagaraEmitterInstance, ESPMode::ThreadSafe> EmitterInst, UNiagaraRibbonRendererProperties* RibbonRenderer, const FSlateLayoutTransform& SlateLayoutTransform, const FTransform& ComponentTransform, const FNiagaraWidgetProperties* WidgetProperties)
 {
 	SCOPE_CYCLE_COUNTER(STAT_GenerateRibbonData);
 	
 	FNiagaraDataSet& DataSet = EmitterInst->GetData();
+	if (!DataSet.IsCurrentDataValid())
+	{
+		return;
+	}
 	FNiagaraDataBuffer& ParticleData = DataSet.GetCurrentDataChecked();
 	const int32 ParticleCount = ParticleData.GetNumInstances();
 
@@ -394,10 +384,21 @@ void UNiagaraUIComponent::AddRibbonRendererData(SNiagaraUISystemWidget* NiagaraW
     const bool FullIDs = RibbonFullIDData.IsValid();
     const bool MultiRibbons = FullIDs;
 
-	auto GetParticlePosition2D = [&LocalSpace ,&SlateRenderTransform ,&PositionData](int32 Index)
+
+    FVector ComponentPos = ComponentTransform.GetLocation();
+    FQuat ComponentRot = ComponentTransform.GetRotation();
+    float ComponentRotAng = FMath::RadiansToDegrees(ComponentRot.GetAngle());
+    float LayoutScale = SlateLayoutTransform.GetScale();
+    FVector WidgetAbsolutePosition = ComponentPos * LayoutScale;
+
+
+	auto GetParticlePosition2D = [&LocalSpace , &ComponentPos,&ComponentRot, &LayoutScale, &WidgetAbsolutePosition, &PositionData](int32 Index)
 	{
-		const FVector Position3D = PositionData.GetSafe(Index, FVector::ZeroVector);
-		return LocalSpace ? SlateRenderTransform.TransformPoint(FVector2D(Position3D.X, -Position3D.Z)) : FVector2D(Position3D.X, -Position3D.Z);
+        const FVector Position3D = PositionData.GetSafe(Index, FVector::ZeroVector);
+        FVector ComponentRelative = LocalSpace ? ComponentRot.RotateVector(Position3D) : Position3D - ComponentPos;
+        FVector WidgetRelative = ComponentRelative * LayoutScale;
+        return  FVector2D(WidgetAbsolutePosition.X + WidgetRelative.X, -WidgetAbsolutePosition.Z - WidgetRelative.Z);
+
 	};	
 
 	auto GetParticleColor = [&ColorData](int32 Index)
@@ -601,4 +602,4 @@ void UNiagaraUIComponent::AddRibbonRendererData(SNiagaraUISystemWidget* NiagaraW
 
 }
 
-//PRAGMA_ENABLE_OPTIMIZATION
+PRAGMA_ENABLE_OPTIMIZATION
