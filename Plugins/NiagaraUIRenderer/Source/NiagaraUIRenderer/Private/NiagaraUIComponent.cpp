@@ -135,10 +135,10 @@ static void PackColor(FVector4& Datas,FColor Color)
 
 static void PackPosition(FVector4& Datas, FVector2D Pos)
 {
-	Pos = Pos.ClampAxes(0.f,8191.f);
+	Pos = Pos.ClampAxes(-1000.f,15383.f);
 
-    PackUint16IntoByte<0, 0>(Datas, uint16(Pos.X * 8.0f));
-    PackUint16IntoByte<1, 0>(Datas, uint16(Pos.Y * 8.0f));
+    PackUint16IntoByte<0, 0>(Datas, uint16((Pos.X + 1000.f) * 4.0f));
+    PackUint16IntoByte<1, 0>(Datas, uint16((Pos.Y + 1000.f) * 4.0f));
 }
 
 static void PackScale(FVector4& Datas, FVector2D Scale)
@@ -303,7 +303,10 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
             FVector2D ParticlePosition = GetParticlePosition2D(ParticleIndex);
             FVector2D ParticleSize = GetParticleSize(ParticleIndex);
             FVector2D ParticleScale = ParticleSize * 0.05 * SlateLayoutTransform.GetScale();
-			          
+			
+			FVector2D ParticleTestPos = ParticlePosition + ParticleSize * 15.f; // Max than sqrt(2)
+			if (ParticleTestPos.X < 0.f || ParticleTestPos.Y < 0.f) continue;
+
             if (WidgetProperties->FakeDepthScale)
             {
                 const float ParticleDepth = (-GetParticleDepth(ParticleIndex) + WidgetProperties->FakeDepthScaleDistance) * FakeDepthScaler;
