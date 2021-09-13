@@ -95,34 +95,33 @@ bool UJJYYMaterialInstanceConstant::CheckMaterialUsage(const EMaterialUsage Usag
     if (Material)
     {
         
-        bool bNeedsRecompile = false;
         bool bUsageSetSuccessfully = false;
 
         if (!Material->bUsedWithNiagaraSprites)
         {
+            Material->Modify();
             Material->bUsedWithNiagaraSprites = 1;
-            bNeedsRecompile =true;
+            Material->ForceRecompileForRendering();
+            Material->MarkPackageDirty();
             bUsageSetSuccessfully = true;
         }
         else if (!Material->bUsedWithNiagaraRibbons)
         {
+            Material->Modify();
             Material->bUsedWithNiagaraRibbons = 1;
-            bNeedsRecompile = true;
+            Material->ForceRecompileForRendering();
+            Material->MarkPackageDirty();
             bUsageSetSuccessfully = true;
         }
         else if (!Material->bUsedWithNiagaraMeshParticles)
         {
+            Material->Modify();
             Material->bUsedWithNiagaraMeshParticles = 1;
-            bNeedsRecompile = true;
+            Material->ForceRecompileForRendering();
+            Material->MarkPackageDirty();
             bUsageSetSuccessfully = true;
         }
 
-        if (bNeedsRecompile)
-        {
-            UMaterial::AllMaterialsCacheResourceShadersForRendering();
-            UMaterialInstance::AllMaterialsCacheResourceShadersForRendering();
-            Material->MarkPackageDirty();
-        }
         return bUsageSetSuccessfully;
     }
     else

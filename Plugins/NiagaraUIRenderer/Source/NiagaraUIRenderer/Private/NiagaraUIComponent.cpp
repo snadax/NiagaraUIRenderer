@@ -310,7 +310,7 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
                 ParticleSize *= ParticleDepth;
             }
 
-            const FColor ParticleColor = GetParticleColor(ParticleIndex).ToFColor(true);
+            const FColor ParticleColor = GetParticleColor(ParticleIndex).ToFColor(false);
 
 			float ParticleRotation = 0.0;           
 
@@ -327,14 +327,12 @@ void UNiagaraUIComponent::AddSpriteRendererData(SNiagaraUISystemWidget* NiagaraW
             }
             
             float ParticleSubImage = 0;
-            int Row = 1;
-            int Column = 1;
+            int Row = (int)SubImageSize.Y;
+            int Column = (int)SubImageSize.X;
 
             if (SubImageSize != FVector2D(1.f, 1.f))
             {
                 ParticleSubImage = GetParticleSubImage(ParticleIndex);
-                Row = (int)FMath::Floor(ParticleSubImage / SubImageSize.X) % (int)SubImageSize.Y;
-                Column = (int)(ParticleSubImage) % (int)(SubImageSize.X);
             }
 			
             FSlateVectorArtInstanceData ArtInstData;
