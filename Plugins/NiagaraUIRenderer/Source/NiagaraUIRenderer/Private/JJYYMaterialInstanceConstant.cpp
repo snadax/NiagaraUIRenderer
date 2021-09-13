@@ -95,8 +95,8 @@ bool UJJYYMaterialInstanceConstant::CheckMaterialUsage(const EMaterialUsage Usag
     if (Material)
     {
         
+#if WITH_EDITOR
         bool bUsageSetSuccessfully = false;
-
         if (!Material->bUsedWithNiagaraSprites)
         {
             Material->Modify();
@@ -123,6 +123,9 @@ bool UJJYYMaterialInstanceConstant::CheckMaterialUsage(const EMaterialUsage Usag
         }
 
         return bUsageSetSuccessfully;
+#else
+    return true;
+#endif
     }
     else
     {
