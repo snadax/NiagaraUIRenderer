@@ -5,10 +5,31 @@
 #include "CoreMinimal.h"
 #include "NiagaraWidgetProperties.h"
 #include "Runtime/UMG/Public/Components/Widget.h"
+#include "Runtime/UMG/Public/Slate/SlateVectorArtData.h"
+#include "SNiagaraUISystemWidget.h"
 #include "NiagaraSystemWidget.generated.h"
 
 class SNiagaraUISystemWidget;
 class UMaterialInterface;
+
+USTRUCT()
+struct FSlateMeshData
+{
+    GENERATED_BODY()
+
+	UPROPERTY()
+		FName MeshPackageName;
+    UPROPERTY()
+        TArray<FVector2D> Vertex;
+    UPROPERTY()
+        TArray<FColor> VertexColor;
+    UPROPERTY()
+        TArray<FVector2D> UV;
+    UPROPERTY()
+        TArray<uint32> Index;
+
+};
+
 
 /**
  The Niagara System Widget allows to render niagara particle system directly into the UI. Only sprite and ribbon CPU particles are supported.
@@ -17,7 +38,7 @@ UCLASS()
 class NIAGARAUIRENDERER_API UNiagaraSystemWidget : public UWidget
 {
 	GENERATED_BODY()
-
+		
 public:
 	UNiagaraSystemWidget(const FObjectInitializer& ObjectInitializer);
 	
@@ -31,6 +52,8 @@ public:
 	virtual const FText GetPaletteCategory() override;
 
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+
+	void ValidateCompiledDefaults(class IWidgetCompilerLog& CompileLog) const override;
 #endif
 
 private:
@@ -85,6 +108,9 @@ public:
 	// Disable warnings for this Widget
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Niagara UI Renderer", AdvancedDisplay)
 	bool DisableWarnings = false;
+
+    UPROPERTY()
+	mutable TArray<FSlateMeshData> MeshData;
 
 private:
 	TSharedPtr<SNiagaraUISystemWidget> NiagaraSlateWidget;

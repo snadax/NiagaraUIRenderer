@@ -11,6 +11,7 @@
 
 class SNiagaraUISystemWidget;
 
+
 /**
  * 
  */
@@ -30,10 +31,11 @@ public:
 	void AddRibbonRendererData(SNiagaraUISystemWidget* NiagaraWidget, TSharedRef<const FNiagaraEmitterInstance, ESPMode::ThreadSafe> EmitterInst,
                                 class UNiagaraRibbonRendererProperties* RibbonRenderer, const FSlateLayoutTransform& SlateLayoutTransform, const FTransform& ComponentTransform, const FNiagaraWidgetProperties* WidgetProperties);
 
+    void AddMeshRendererData(SNiagaraUISystemWidget* NiagaraWidget, TSharedRef<const FNiagaraEmitterInstance, ESPMode::ThreadSafe> EmitterInst,
+        class UNiagaraMeshRendererProperties* MeshRenderer, const FSlateLayoutTransform& SlateLayoutTransform, const FTransform& ComponentTransform, const FNiagaraWidgetProperties* WidgetProperties);
 
 	
 private:
 	bool ShouldActivateParticle = false;
 	float WidgetAngleRad = 0.f;
-	
 };

@@ -5,7 +5,9 @@
 #include "NiagaraRenderer.h"
 #include "NiagaraRibbonRendererProperties.h"
 #include "NiagaraSpriteRendererProperties.h"
+#include "NiagaraMeshRendererProperties.h"
 #include "Slate/SlateVectorArtInstanceData.h"
+#include "NiagaraSystemWidget.h"
 #include "SNiagaraUISystemWidget.h"
 
 
@@ -17,16 +19,6 @@ PRAGMA_DISABLE_OPTIMIZATION
 
 void UNiagaraUIComponent::SetTransformationForUIRendering(const FTransform& Transform)
 {
-    /*float A, B, C, D;
-	SlateRenderTransform.GetMatrix().GetMatrix(A, B, C, D);
-    FVector2D T = SlateRenderTransform.GetTranslation();
-    FMatrix M3 = FMatrix(
-        FPlane(A, 0.0f, -B, 0.0f),
-        FPlane(0.0f, 1.0f, 0.0f, 0.0f),
-        FPlane(-C, 0.0f, D, 0.0f),
-        FPlane(T.X, 0.0f, -T.Y, 1.0f)
-    );*/
-
     SetRelativeTransform(Transform);
 
     if (bAutoActivate)
@@ -72,7 +64,7 @@ void UNiagaraUIComponent::RenderUI(SNiagaraUISystemWidget* NiagaraWidget, const 
 	}
 
 	Algo::Sort(Renderers, [] (FNiagaraRendererEntry& FirstElement, FNiagaraRendererEntry& SecondElement) {return FirstElement.RendererProperties->SortOrderHint < SecondElement.RendererProperties->SortOrderHint;});
-			
+    
 	for (FNiagaraRendererEntry Renderer : Renderers)
 	{
 		if (Renderer.RendererProperties && Renderer.RendererProperties->GetIsEnabled() && Renderer.RendererProperties->IsSimTargetSupported(Renderer.Emitter->SimTarget))
@@ -87,6 +79,10 @@ void UNiagaraUIComponent::RenderUI(SNiagaraUISystemWidget* NiagaraWidget, const 
 				{
 					AddRibbonRendererData(NiagaraWidget, Renderer.EmitterInstance, RibbonRenderer, SlateLayoutTransform, ComponentTransform, WidgetProperties);
 				}
+                else if (UNiagaraMeshRendererProperties* MeshRenderer = Cast<UNiagaraMeshRendererProperties>(Renderer.RendererProperties))
+                {
+                    AddMeshRendererData(NiagaraWidget, Renderer.EmitterInstance, MeshRenderer, SlateLayoutTransform, ComponentTransform, WidgetProperties);
+                }
 			}
 		}
 	}
@@ -600,6 +596,137 @@ void UNiagaraUIComponent::AddRibbonRendererData(SNiagaraUISystemWidget* NiagaraW
 			};
 		}
 	}
+
+}
+
+
+void UNiagaraUIComponent::AddMeshRendererData(SNiagaraUISystemWidget* NiagaraWidget, TSharedRef<const FNiagaraEmitterInstance, ESPMode::ThreadSafe> EmitterInst, class UNiagaraMeshRendererProperties* MeshRenderer, const FSlateLayoutTransform& SlateLayoutTransform, const FTransform& ComponentTransform, const FNiagaraWidgetProperties* WidgetProperties)
+{
+    {
+        SCOPE_CYCLE_COUNTER(STAT_GenerateSpriteData);
+
+        auto* Widget = Cast<UNiagaraSystemWidget>( GetOuter());
+        if (!Widget) return;
+        if (Widget->MeshData.Num() == 0) return;
+        FName CurrentMeshPackageName = MeshRenderer->ParticleMesh->GetPackage()->GetFName();
+        FSlateMeshData* CurrentMeshData =  Widget->MeshData.FindByPredicate([&](FSlateMeshData& MeshData){return MeshData.MeshPackageName == CurrentMeshPackageName;});
+        if (!CurrentMeshData) return;
+        FNiagaraDataSet& DataSet = EmitterInst->GetData();
+        if (!DataSet.IsCurrentDataValid())
+        {
+            return;
+        }
+        FNiagaraDataBuffer& ParticleData = DataSet.GetCurrentDataChecked();
+        const int32 ParticleCount = ParticleData.GetNumInstances();
+
+        if (ParticleCount < 1)
+            return;
+
+        
+
+        FSlateVertex* VertexData;
+        SlateIndex* IndexData;
+        FSlateBrush Brush;
+        UMaterialInterface* SpriteMaterial = MeshRenderer->OverrideMaterials[0].ExplicitMat;
+        uint32 RenderDataIndex = NiagaraWidget->AddRenderDataWithInstance(&VertexData, &IndexData, SpriteMaterial, CurrentMeshData->Vertex.Num(), CurrentMeshData->Index.Num());
+        for (int VertexNum = 0; VertexNum < CurrentMeshData->Vertex.Num(); ++VertexNum)
+        {
+            VertexData[VertexNum].Position = CurrentMeshData->Vertex[VertexNum];
+            VertexData[VertexNum].Color = CurrentMeshData->VertexColor[VertexNum];
+            VertexData[VertexNum].TexCoords[0] = CurrentMeshData->UV[VertexNum].X;
+            VertexData[VertexNum].TexCoords[1] = CurrentMeshData->UV[VertexNum].Y;
+        }
+        for (int IndexNum = 0; IndexNum < CurrentMeshData->Index.Num(); ++IndexNum)
+        {
+            IndexData[IndexNum] = CurrentMeshData->Index[IndexNum];
+        }
+
+        const auto PositionData = FNiagaraDataSetAccessor<FVector>::CreateReader(DataSet, MeshRenderer->PositionBinding.GetDataSetBindableVariable().GetName());
+        const auto ColorData = FNiagaraDataSetAccessor<FLinearColor>::CreateReader(DataSet, MeshRenderer->ColorBinding.GetDataSetBindableVariable().GetName());
+        const auto VelocityData = FNiagaraDataSetAccessor<FVector>::CreateReader(DataSet, MeshRenderer->VelocityBinding.GetDataSetBindableVariable().GetName());
+        const auto SizeData = FNiagaraDataSetAccessor<FVector>::CreateReader(DataSet, MeshRenderer->ScaleBinding.GetDataSetBindableVariable().GetName());
+        const auto RotationData = FNiagaraDataSetAccessor<FQuat>::CreateReader(DataSet, MeshRenderer->MeshOrientationBinding.GetDataSetBindableVariable().GetName());
+
+        bool LocalSpace = EmitterInst->GetCachedEmitter()->bLocalSpace;
+        FVector ComponentPos = ComponentTransform.GetLocation();
+        FQuat ComponentRot = ComponentTransform.GetRotation();
+        float ComponentRotAng = FMath::RadiansToDegrees(ComponentRot.GetAngle());
+        float LayoutScale = SlateLayoutTransform.GetScale();
+        FVector WidgetAbsolutePosition = ComponentPos * LayoutScale;
+
+        auto GetParticlePosition2D = [&LocalSpace, &LayoutScale, &WidgetAbsolutePosition, &ComponentPos, &ComponentRot, &PositionData](int32 Index)
+        {
+            const FVector Position3D = PositionData.GetSafe(Index, FVector::ZeroVector);
+            FVector ComponentRelative = LocalSpace ? ComponentRot.RotateVector(Position3D) : Position3D - ComponentPos;
+            FVector WidgetRelative = ComponentRelative * LayoutScale;
+            return  FVector2D(WidgetAbsolutePosition.X + WidgetRelative.X, -WidgetAbsolutePosition.Z - WidgetRelative.Z);
+        };
+
+        auto GetParticleDepth = [&PositionData](int32 Index)
+        {
+            return PositionData.GetSafe(Index, FVector::ZeroVector).Y;
+        };
+
+        auto GetParticleColor = [&ColorData](int32 Index)
+        {
+            return ColorData.GetSafe(Index, FLinearColor::White);
+        };
+
+        auto GetParticleVelocity = [&LocalSpace, &ComponentRot, &VelocityData](int32 Index)
+        {
+            const FVector Velocity3D = VelocityData.GetSafe(Index, FVector::ZeroVector);
+            return LocalSpace ? ComponentRot.RotateVector(Velocity3D) : Velocity3D;
+        };
+
+        auto GetParticleSize = [&SizeData](int32 Index)
+        {
+            return SizeData.GetSafe(Index, FVector::ZeroVector);
+        };
+
+        auto GetParticleRotation = [&RotationData](int32 Index)
+        {
+            return RotationData.GetSafe(Index, FQuat::Identity);
+        };
+
+        FSlateInstanceBufferData InstanceData;
+
+        for (int ParticleIndex = 0; ParticleIndex < ParticleCount; ++ParticleIndex)
+        {
+
+            FVector2D ParticlePosition = GetParticlePosition2D(ParticleIndex);
+            FVector ParticleSize = GetParticleSize(ParticleIndex);
+            FVector ParticleScale = ParticleSize * SlateLayoutTransform.GetScale();
+            const FColor ParticleColor = GetParticleColor(ParticleIndex).ToFColor(false);
+
+            float ParticleAngle = 0.f;
+
+            if (MeshRenderer->FacingMode == ENiagaraMeshFacingMode::Velocity)
+            {
+                const FVector ParticleVelocity = GetParticleVelocity(ParticleIndex);
+                float Ang = FMath::Atan2(-ParticleVelocity.Z, ParticleVelocity.X);
+                ParticleAngle = FMath::RadiansToDegrees(Ang);
+            }
+            else
+            {
+                FQuat ParticleRotation = GetParticleRotation(ParticleIndex);
+                FVector rotvec = ParticleRotation.RotateVector(FVector(1, 0, 0));
+                float Ang = FMath::Atan2(-rotvec.Z, rotvec.X);
+                ParticleAngle = FMath::RadiansToDegrees(Ang);
+            }
+                       
+            FSlateVectorArtInstanceData ArtInstData;
+            FVector4& data = ArtInstData.GetData();
+            InitPack(data);
+            PackPosition(data, ParticlePosition);
+            PackRotation(data, ParticleAngle);
+            PackColor(data, ParticleColor);
+            PackScale(data, FVector2D(ParticleScale.X, ParticleScale.Z));
+            InstanceData.Add(ArtInstData.GetData());
+
+        }
+        NiagaraWidget->AddRenderRun(RenderDataIndex, 0, InstanceData.Num());
+        NiagaraWidget->UpdatePerInstanceBuffer(RenderDataIndex, InstanceData);
+    }
 
 }
 
